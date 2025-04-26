@@ -1,1 +1,38 @@
-Code
+#!/bin/bash
+
+# Variables
+DB_NAME="your_database_name"
+DB_USER="your_db_user"
+DB_PASS="your_db_password"
+BACKUP_DIR="/tmp/mysql_backups"
+S3_BUCKET="s3://your-s3-bucket-name/mysql-backups"
+DATE=$(date +"%Y-%m-%d-%H-%M")
+
+# Create backup directory if it doesn't exist
+mkdir -p "$BACKUP_DIR"
+
+# Dump the database
+BACKUP_FILE="$BACKUP_DIR/${DB_NAME}_backup_$DATE.sql"
+
+mysqldump -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$BACKUP_FILE"
+
+if [ $? -eq 0 ]; then
+    echo "Database backup successful: $BACKUP_FILE"
+else
+    echo "Database backup failed!"
+    exit 1
+fi
+
+# Upload to S3
+aws s3 cp "$BACKUP_FILE" "$S3_BUCKET/"
+
+if [ $? -eq 0 ]; then
+    echo "Backup uploaded to S3 successfully."
+else
+    echo "Failed to upload backup to S3!"
+    exit 2
+fi
+
+# (Optional) Clean up local backup files older than 7 days
+find "$BACKUP_DIR" -type f -mtime +7 -name "*.sql" -exec rm {} \;
+
